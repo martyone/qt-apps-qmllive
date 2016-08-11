@@ -37,23 +37,23 @@
 #include "livenodeengine.h"
 #include "remotereceiver.h"
 
-class MyView : public QQuickView
+class MyAppEngine : public QQmlApplicationEngine
 {
     Q_OBJECT
 
 public:
-    MyView(); // Perform some setup here
+    MyAppEngine(); // Perform some setup here
 };
 
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
 
-    MyView view;
+    MyAppEngine appEngine;
 
     LiveNodeEngine node;
-    // Let qml live instrument your view
-    node.setView(&view);
+    // Let qml live instrument your application
+    node.setQmlEngine(&appEngine);
     // Tell it where file updates should be stored relative to
     node.setWorkspace(".");
     // For local usage use the LocalPublisher
@@ -62,13 +62,11 @@ int main(int argc, char **argv)
     // Listen to ipc call from remote
     receiver.listen(10234);
 
-    view.show();
-
     return app.exec();
 }
 //![0]
 
-MyView::MyView()
+MyAppEngine::MyAppEngine()
 {
     QStringList colors;
     colors.append(QStringLiteral("red"));
@@ -77,8 +75,7 @@ MyView::MyView()
     colors.append(QStringLiteral("black"));
     rootContext()->setContextProperty("myColors", colors);
 
-    setResizeMode(QQuickView::SizeViewToRootObject);
-    setSource(QUrl::fromLocalFile("main.qml"));
+    load(QStringLiteral("main.qml"));
 };
 
 #include "main.moc"
