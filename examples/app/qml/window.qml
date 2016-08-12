@@ -29,56 +29,35 @@
 **
 ****************************************************************************/
 
-//![0]
-#include <QtGui>
-#include <QtQuick>
+import QtQuick 2.0
+import QtQuick.Window 2.2
 
-// Use QmlLive headers
-#include "livenodeengine.h"
-#include "remotereceiver.h"
+Window {
+    id: window
+    width: 100
+    height: 100
+    visible: true
 
-class MyView : public QQuickView
-{
-    Q_OBJECT
+    ListView {
+        // TODO: Make it work with 'anchors.fill: parent'. Window size seems to
+        // be propagated too late to the contentItem, giving zero size initially.
+        width: window.width
+        height: window.height
 
-public:
-    MyView(); // Perform some setup here
-};
-
-int main(int argc, char **argv)
-{
-    QGuiApplication app(argc, argv);
-
-    MyView view;
-
-    LiveNodeEngine node;
-    // Let qml live instrument your view
-    node.setView(&view);
-    // Tell it where file updates should be stored relative to
-    node.setWorkspace(".");
-    // For local usage use the LocalPublisher
-    RemoteReceiver receiver;
-    receiver.registerNode(&node);
-    // Listen to ipc call from remote
-    receiver.listen(10234);
-
-    view.show();
-
-    return app.exec();
+        model: ["red", "green", "black", "blue"]
+        delegate: Rectangle {
+            height: 25
+            width: 100
+            color: model.modelData
+            Image {
+                anchors.left: parent.left
+                source: "../icon.png"
+            }
+            Text {
+                x: 25
+                text: model.modelData
+                color: "white"
+            }
+        }
+    }
 }
-//![0]
-
-MyView::MyView()
-{
-    QStringList colors;
-    colors.append(QStringLiteral("red"));
-    colors.append(QStringLiteral("green"));
-    colors.append(QStringLiteral("blue"));
-    colors.append(QStringLiteral("black"));
-    rootContext()->setContextProperty("myColors", colors);
-
-    setResizeMode(QQuickView::SizeViewToRootObject);
-    setSource(QUrl::fromLocalFile("main.qml"));
-};
-
-#include "main.moc"
