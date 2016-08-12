@@ -48,16 +48,16 @@ QmlHelper::QmlHelper(QObject *parent) :
 
 /*!
  * Loads dummy data from a "dummydata" folder in the workspace folder
- * \a view defines the View where you want to export the dummy data to
+ * \a engine defines the Engine where you want to export the dummy data to
  * The "dummydata" will be searched in the "dummydata" sub directory of \a workspace
  */
-void QmlHelper::loadDummyData(QQuickView *view, const QString &workspace)
+void QmlHelper::loadDummyData(QQmlEngine *engine, const QString &workspace)
 {
-    Q_ASSERT(view);
+    Q_ASSERT(engine);
     QDir dir(workspace + "/dummydata", "*.qml");
     foreach (QString entry, dir.entryList()) {
 
-        QQmlComponent comp(view->engine(), dir.filePath(entry));
+        QQmlComponent comp(engine, dir.filePath(entry));
         QObject *obj = comp.create();
 
         if (comp.isError()) {
@@ -66,23 +66,10 @@ void QmlHelper::loadDummyData(QQuickView *view, const QString &workspace)
             }
         }
         if (obj) {
-            qWarning() << "loaded dummy data: " << dir.filePath(entry);
+            qInfo() << "loaded dummy data: " << dir.filePath(entry);
             entry.chop(4);
-            view->rootContext()->setContextProperty(entry, obj);
-            obj->setParent(view);
+            engine->rootContext()->setContextProperty(entry, obj);
+            obj->setParent(engine);
         }
     }
 }
-
-/*!
- * Adds an import path \a path to your qml viewer \a view
- */
-void QmlHelper::addImportPath(QQuickView *view, const QString &path)
-{
-    Q_ASSERT(view);
-    view->engine()->addImportPath(path);
-}
-
-
-
-

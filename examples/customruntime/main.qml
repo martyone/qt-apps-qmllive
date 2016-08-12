@@ -30,19 +30,34 @@
 ****************************************************************************/
 
 import QtQuick 2.0
+import QtQuick.Window 2.2
 
-ListView {
+Window {
+    id: window
     width: 100
     height: 100
+    visible: true
 
-    model: myColors
-    delegate: Rectangle {
-        height: 25
-        width: 100
-        color: model.modelData
-        Text {
-            text: model.modelData
-            color: "white"
+    ListView {
+        width: window.width
+        height: window.height
+
+        //model: myColors
+        model: ["red", "green", "black", "blue"]
+        delegate: Rectangle {
+            height: 25
+            width: 100
+            color: model.modelData
+            Image {
+                anchors.left: parent.left
+                source: "icon.png"
+            }
+            Text {
+                x: 25
+                text: model.modelData
+                color: "green"
+            }
         }
+        Component.onCompleted: console.log("COMPLETED width: " + width + " parent.width: " + parent.width + "window.width: " + window.width + " parent: " + parent)
     }
 }
