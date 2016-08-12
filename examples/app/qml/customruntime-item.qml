@@ -40,7 +40,12 @@ ListView {
         height: 25
         width: 100
         color: model.modelData
+        Image {
+            anchors.left: parent.left
+            source: "../icon.png"
+        }
         Text {
+            x: 25
             text: model.modelData
             color: "white"
         }

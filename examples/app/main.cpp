@@ -29,19 +29,55 @@
 **
 ****************************************************************************/
 
-#pragma once
+//![0]
+#include <QtGui>
+#include <QtQuick>
 
-#include <QQuickView>
+// Use QmlLive headers
+#include "livenodeengine.h"
+#include "remotereceiver.h"
 
-class BenchQuickView : public QQuickView
+class MyQmlEngine : public QQmlEngine
 {
     Q_OBJECT
+
 public:
-    explicit BenchQuickView(QWindow *parent = 0);
-
-signals:
-    void sizeChanged(const QSize &size);
-protected:
-    void resizeEvent(QResizeEvent * event);
-
+    MyQmlEngine(); // Perform some setup here
 };
+
+int main(int argc, char **argv)
+{
+    QGuiApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(false);
+
+    MyQmlEngine qmlEngine;
+    QQuickView fallbackView(&qmlEngine, 0);
+
+    LiveNodeEngine node;
+    // Let qml live know your runtime
+    node.setQmlEngine(&qmlEngine);
+    // Allow it to display QML components with non-QQuickWindow root object
+    node.setFallbackView(&fallbackView);
+    // Tell it where file updates should be stored relative to
+    node.setWorkspace(".");
+    // For local usage use the LocalPublisher
+    RemoteReceiver receiver;
+    receiver.registerNode(&node);
+    // Listen to ipc call from remote
+    receiver.listen(10234);
+
+    return app.exec();
+}
+//![0]
+
+MyQmlEngine::MyQmlEngine()
+{
+    QStringList colors;
+    colors.append(QStringLiteral("red"));
+    colors.append(QStringLiteral("green"));
+    colors.append(QStringLiteral("blue"));
+    colors.append(QStringLiteral("black"));
+    rootContext()->setContextProperty("myColors", colors);
+};
+
+#include "main.moc"
