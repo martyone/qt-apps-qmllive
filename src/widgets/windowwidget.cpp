@@ -43,21 +43,31 @@ WindowWidget::WindowWidget(QWidget *parent) :
     setFrameShape(QFrame::NoFrame);
 }
 
-void WindowWidget::setHostedWindow(QQuickView *hostedWindow)
+void WindowWidget::setHostedWindow(QQuickWindow *hostedWindow)
 {
-    QQuickView *oldView = 0;
+    qWarning() << "XXX" << m_hostedWindow << hostedWindow;
+
+    if (m_hostedWindow == hostedWindow) {
+        return;
+    }
+
     if (m_hostedWindow) {
         m_hostedWindow->removeEventFilter(this);
-        oldView = m_hostedWindow;
+        m_hostedWindow->hide();
+        m_hostedWindow->setParent(0);
     }
 
     m_hostedWindow = hostedWindow;
+
     if (m_hostedWindow) {
         m_hostedWindow->installEventFilter(this);
 
         // force creation of the TL window in order to get its handle
         if (!testAttribute(Qt::WA_WState_Created))
             create(0, true, true);
+        //qWarning() << "XXX_1" << windowHandle();
+        //winId();
+        //qWarning() << "XXX_2" << windowHandle();
 
         if (!windowHandle())
             qWarning("Could not get a valid windowhandle for our widget based window");
@@ -67,7 +77,7 @@ void WindowWidget::setHostedWindow(QQuickView *hostedWindow)
         m_hostedWindow->setVisible(isVisible());
 
         // this needs to be done in order to prevent showing uninitialized frames
-        m_hostedWindow->setGeometry(QRect(viewport()->mapToGlobal(QPoint()), viewport()->size()));
+        //m_hostedWindow->setGeometry(QRect(viewport()->mapToGlobal(QPoint()), viewport()->size()));
 
         viewport()->setBackgroundRole(backgroundRole());
         viewport()->setPalette(palette());
@@ -75,14 +85,9 @@ void WindowWidget::setHostedWindow(QQuickView *hostedWindow)
         setFocusPolicy(Qt::StrongFocus);
         m_hostedWindow->show();
     }
-
-    if (oldView) {
-        oldView->hide();
-        oldView->setParent(0);
-    }
 }
 
-QQuickView *WindowWidget::hostedWindow() const
+QQuickWindow *WindowWidget::hostedWindow() const
 {
     return m_hostedWindow;
 }
@@ -109,8 +114,11 @@ QSize WindowWidget::sizeHint() const
 
 void WindowWidget::forceInitialResize()
 {
-    if (m_hostedWindow && m_hostedWindow->resizeMode() == QQuickView::SizeRootObjectToView) {
-        m_hostedWindow->resize(size());
+    if (QQuickView *view = qobject_cast<QQuickView *>(m_hostedWindow)) {
+        if (view->resizeMode() == QQuickView::SizeRootObjectToView) {
+            qWarning() << "FORCE INITIAL RESIZE" << m_hostedWindow << size();
+            view->resize(size());
+        }
     }
     updateGeometry();
     updateScrollBars();
@@ -174,8 +182,11 @@ bool WindowWidget::event(QEvent *e)
         }
         case QEvent::Resize: {
             QResizeEvent *re = static_cast<QResizeEvent*>(e);
-            if (m_hostedWindow && m_hostedWindow->resizeMode() == QQuickView::SizeRootObjectToView) {
-                m_hostedWindow->resize(re->size());
+            if (QQuickView *view = qobject_cast<QQuickView *>(m_hostedWindow)) {
+                if (view->resizeMode() == QQuickView::SizeRootObjectToView) {
+                    qWarning() << "PASS RESIZE EVENT" << m_hostedWindow;
+                    view->resize(re->size());
+                }
             }
             updateGeometry();
             updateScrollBars();
@@ -250,25 +261,30 @@ void WindowWidget::updateScrollBars()
 }
 void WindowWidget::updateWindowPosition()
 {
-    if (m_hostedWindow && m_hostedWindow->rootObject()) {
+    if (m_hostedWindow && !m_hostedWindow->contentItem()->childItems().isEmpty()) {
         QSize wSize = qmlSize();
         Qt::LayoutDirection dir = layoutDirection();
         QRect scrolled = QStyle::visualRect(dir, viewport()->rect(), QRect(QPoint(-horizontalScrollBar()->value(), -verticalScrollBar()->value()), wSize));
         QRect aligned = QStyle::alignedRect(dir, m_centering ? Qt::AlignCenter : Qt::AlignTop | Qt::AlignLeft, wSize, viewport()->rect());
 
-        //qWarning() << "xAlign:" << aligned.x() << "xScrolled:" << scrolled.x();
+        qWarning() << "xAlign:" << aligned.x() << "xScrolled:" << scrolled.x();
         m_hostedWindow->setPosition(wSize.width() < viewport()->width() ? aligned.x() : scrolled.x(),
                                     wSize.height() < viewport()->height() ? aligned.y() : scrolled.y());
+    } else {
+        qWarning() << "CAN'T ALIGN";
     }
 }
 
 QSize WindowWidget::qmlSize() const
 {
     QSize s;
-    if (m_hostedWindow && m_hostedWindow->rootObject()) {
-        s = QSize(m_hostedWindow->rootObject()->width(),
-                  m_hostedWindow->rootObject()->height());
+    if (m_hostedWindow && !m_hostedWindow->contentItem()->childItems().isEmpty()) {
+        qDebug() << "YYY" << m_hostedWindow->contentItem()->childItems();
+        QQuickItem *const rootItem = m_hostedWindow->contentItem()->childItems().first();
+        s = QSize(rootItem->width(), rootItem->height());
     }
+
+    qWarning() << "XXX" << s;
 
     if (s.width() <= 20)
         s.setWidth(800);

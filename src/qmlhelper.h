@@ -41,8 +41,7 @@ class QmlHelper : public QObject
 public:
     explicit QmlHelper(QObject *parent = 0);
 
-    static void loadDummyData(QQuickView* view, const QString& workspace);
-    static void addImportPath(QQuickView* view, const QString& path);
+    static void loadDummyData(QQmlEngine *engine, const QString &workspace);
 
 Q_SIGNALS:
 
