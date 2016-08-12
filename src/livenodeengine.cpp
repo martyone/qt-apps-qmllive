@@ -64,19 +64,6 @@
  */
 
 /*!
-    \enum LiveNodeEngine::UpdateMode
-
-    This enum type specifies the update behavior for the view:
-
-    \value ReloadDocument
-           Clears the component cache and reloads the active document
-    \value RecreateView
-           Destroys the view and re-creates the view with the active document
-    \value RecreateProcess
-           Restarts the process with the active document
-*/
-
-/*!
  * Standard constructor using \a parent as parent
  */
 LiveNodeEngine::LiveNodeEngine(QObject *parent)
@@ -85,38 +72,48 @@ LiveNodeEngine::LiveNodeEngine(QObject *parent)
     , m_xOffset(0)
     , m_yOffset(0)
     , m_rotation(0)
-    , m_view(0)
-    , m_recreateView(0)
     , m_delayReload(new QTimer(this))
-    , m_mode(ReloadDocument)
     , m_pluginFactory(new ContentPluginFactory(this))
     , m_activePlugin(0)
-    , m_reloadPlugins(false)
 {
     m_delayReload->setInterval(250);
     m_delayReload->setSingleShot(true);
     connect(m_delayReload, SIGNAL(timeout()), this, SLOT(reloadDocument()));
 }
 
-/*!
- * Sets the view which should be used to \a view
- */
-    void LiveNodeEngine::setView(QQuickView *view)
+QQmlEngine *LiveNodeEngine::qmlEngine() const
 {
-    m_view = view;
-    m_view->rootContext()->setContextProperty("livert", m_runtime);
-    m_view->engine()->setOutputWarningsToStandardError(false); // log
-    if (!m_importPaths.isEmpty())
-        m_view->engine()->setImportPathList(m_importPaths);
+    return m_qmlEngine;
+}
 
-    connect(m_view->engine(), SIGNAL(warnings(QList<QQmlError>)),
-            this, SIGNAL(logErrors(QList<QQmlError>)));
-    connect(m_view, SIGNAL(statusChanged(QQuickView::Status)),
-            this, SLOT(onStatusChanged(QQuickView::Status)));
-    connect(m_view, SIGNAL(widthChanged(int)),
-            this, SLOT(onSizeChanged()));
-    connect(m_view, SIGNAL(heightChanged(int)),
-            this, SLOT(onSizeChanged()));
+void LiveNodeEngine::setQmlEngine(QQmlEngine *qmlEngine)
+{
+    Q_ASSERT(!this->qmlEngine());
+    Q_ASSERT(qmlEngine);
+
+    m_qmlEngine = qmlEngine;
+
+    connect(m_qmlEngine, &QQmlEngine::warnings, this, &LiveNodeEngine::logErrors);
+
+    m_qmlEngine->rootContext()->setContextProperty("livert", m_runtime);
+}
+
+QQuickView *LiveNodeEngine::fallbackView() const
+{
+    return m_fallbackView;
+}
+
+void LiveNodeEngine::setFallbackView(QQuickView *fallbackView)
+{
+    Q_ASSERT(qmlEngine());
+    Q_ASSERT(fallbackView);
+    Q_ASSERT(fallbackView->engine() == qmlEngine());
+
+    if (fallbackView && fallbackView->engine() != m_qmlEngine) {
+        qCritical() << "LiveNodeEngine::fallbackView must use the QmlEngine instance set as LiveNodeEngine::qmlEngine";
+    }
+
+    m_fallbackView = fallbackView;
 }
 
 /*!
@@ -124,14 +121,9 @@ LiveNodeEngine::LiveNodeEngine(QObject *parent)
  */
 void LiveNodeEngine::setXOffset(int offset)
 {
-    QQuickView *view = 0;
-
-    if (m_view)
-        view = m_view;
-    if (m_recreateView)
-        view = m_recreateView;
-    if (view)
-        view->contentItem()->setX(offset);
+    if (m_activeWindow) {
+        m_activeWindow->contentItem()->setX(offset);
+    }
 
     m_xOffset = offset;
 }
@@ -149,14 +141,9 @@ int LiveNodeEngine::xOffset() const
  */
 void LiveNodeEngine::setYOffset(int offset)
 {
-    QQuickView *view = 0;
-
-    if (m_view)
-        view = m_view;
-    if (m_recreateView)
-        view = m_recreateView;
-    if (view)
-        view->contentItem()->setY(offset);
+    if (m_activeWindow) {
+        m_activeWindow->contentItem()->setY(offset);
+    }
 
     m_yOffset = offset;
 }
@@ -175,16 +162,11 @@ int LiveNodeEngine::yOffset() const
 
 void LiveNodeEngine::setRotation(int rotation)
 {
-    QQuickView *view = 0;
-
-    if (m_view)
-        view = m_view;
-    if (m_recreateView)
-        view = m_recreateView;
-    if (view) {
-        view->contentItem()->setRotation(0);
-        view->contentItem()->setTransformOriginPoint(QPointF(view->width()/2, view->height()/2));
-        view->contentItem()->setRotation(rotation);
+    if (m_activeWindow) {
+        m_activeWindow->contentItem()->setRotation(0);
+        const QPointF center(m_activeWindow->width() / 2, m_activeWindow->height() / 2);
+        m_activeWindow->contentItem()->setTransformOriginPoint(center);
+        m_activeWindow->contentItem()->setRotation(rotation);
     }
 
     m_rotation = rotation;
@@ -196,25 +178,6 @@ void LiveNodeEngine::setRotation(int rotation)
 int LiveNodeEngine::rotation() const
 {
     return m_rotation;
-}
-
-/*!
- * Sets the update mode for the scene to \a mode.
- *
- * Either to reload just the document, or
- * the view, or the whole process.
- */
-void LiveNodeEngine::setUpdateMode(LiveNodeEngine::UpdateMode mode)
-{
-    m_mode = mode;
-}
-
- /*!
-  * Returns the current update mode for the scene
-  */
-LiveNodeEngine::UpdateMode LiveNodeEngine::updateMode() const
-{
-    return m_mode;
 }
 
 /*!
@@ -242,53 +205,11 @@ void LiveNodeEngine::delayReload()
 }
 
 /*!
- * Sets the view which should be used to \a view
- */
-void LiveNodeEngine::recreateView()
-{
-    if (m_windowComponent)
-        delete m_windowComponent;
-    if (m_windowObject)
-        delete m_windowObject;
-
-    if (m_recreateView) {
-        //m_recreateView->setSource(QUrl());
-        m_recreateView->engine()->clearComponentCache();
-        delete m_recreateView;
-        if (m_reloadPlugins)
-            qmlClearTypeRegistrations();
-        QQuickPixmap::purgeCache();
-    }
-
-    m_recreateView = initView();
-
-    setXOffset(m_xOffset);
-    setYOffset(m_yOffset);
-
-    m_recreateView->rootContext()->setContextProperty("livert", m_runtime);
-    m_recreateView->engine()->setOutputWarningsToStandardError(false); // log
-    if (!m_importPaths.isEmpty())
-        m_recreateView->engine()->setImportPathList(m_importPaths);
-
-    m_recreateView->engine()->clearComponentCache();
-    QmlHelper::loadDummyData(m_recreateView, m_workspace.absolutePath());
-
-    connect(m_recreateView->engine(), SIGNAL(warnings(QList<QQmlError>)),
-            this, SIGNAL(logErrors(QList<QQmlError>)));
-    connect(m_recreateView, SIGNAL(statusChanged(QQuickView::Status)),
-            this, SLOT(onStatusChanged(QQuickView::Status)));
-    connect(m_recreateView, SIGNAL(widthChanged(int)),
-            this, SLOT(onSizeChanged()));
-    connect(m_recreateView, SIGNAL(heightChanged(int)),
-            this, SLOT(onSizeChanged()));
-}
-
-/*!
  * Checks if the QtQuick Controls module exists for the content adapters
  */
-void LiveNodeEngine::checkQmlFeatures(QQuickView *view)
+void LiveNodeEngine::checkQmlFeatures()
 {
-    foreach (QString importPath, view->engine()->importPathList()) {
+    foreach (const QString &importPath, m_qmlEngine->importPathList()) {
         QDir dir(importPath);
         if (dir.exists("QtQuick/Controls") &&
             dir.exists("QtQuick/Layouts") &&
@@ -298,61 +219,107 @@ void LiveNodeEngine::checkQmlFeatures(QQuickView *view)
     }
 }
 
+QUrl LiveNodeEngine::errorScreenUrl() const
+{
+    return m_quickFeatures.testFlag(ContentAdapterInterface::QtQuickControls)
+        ? QUrl("qrc:/livert/error_qt5_controls.qml")
+        : QUrl("qrc:/livert/error_qt5.qml");
+}
+
 /*!
  * Reloads the qml view source.
  */
 void LiveNodeEngine::reloadDocument()
 {
-    QQuickView *view = 0;
+    Q_ASSERT(qmlEngine());
 
-    if (m_mode == RecreateView) {
-        recreateView();
+    const QRect previousGeometry = m_activeWindow ? m_activeWindow->geometry() : QRect();
 
-        view = m_recreateView;
-    } else {
-        view = m_view;
-        view->setSource(QUrl());
-        view->engine()->trimComponentCache();
-        view->releaseResources();
+    foreach (const QMetaObject::Connection &connection, m_activeWindowConnections) {
+        disconnect(connection);
     }
+    m_activeWindowConnections.clear();
 
-    checkQmlFeatures(view);
+    delete m_object;
+    if (m_fallbackView) {
+        m_fallbackView->setSource(QUrl());
+        m_fallbackView->setResizeMode(QQuickView::SizeViewToRootObject);
+    }
+    QQuickPixmap::purgeCache();
+    m_qmlEngine->trimComponentCache();
+
+    checkQmlFeatures();
 
     emit logClear();
-    //emit logIgnoreMessages(true);
 
-    QUrl url = queryDocumentViewer(m_activeFile);
-    QQmlEngine *engine = view->engine();
-    m_windowComponent = new QQmlComponent(engine);
+    const QUrl url = queryDocumentViewer(m_activeFile);
 
-    m_windowComponent->loadUrl(url);
+    QScopedPointer<QQmlComponent> component(new QQmlComponent(m_qmlEngine));
+    component->loadUrl(url);
 
-    m_windowObject = m_windowComponent->create();
-    QQuickWindow *window = qobject_cast<QQuickWindow *>(m_windowObject);
-    if (window) {
-        engine->setIncubationController(window->incubationController());
-        window->show();
+    m_object = component->create();
+
+    if (QQuickWindow *window = qobject_cast<QQuickWindow *>(m_object)) {
+        // TODO (why) is this needed?
+        m_qmlEngine->setIncubationController(window->incubationController());
+        if (m_fallbackView) {
+            m_fallbackView->hide();
+        }
+        m_activeWindow = window;
+    } else if (m_object) {
+        if (m_fallbackView) {
+            QQuickItem *item = qobject_cast<QQuickItem *>(m_object);
+            const bool rootObjectHasEmptySize = item && QSize(item->width(), item->height()).isEmpty();
+            if (rootObjectHasEmptySize)
+                qWarning() << "ROOT OBJECT HAS EMPTY SIZE" << m_activeWindow << m_fallbackView->rootObject();
+            if (m_activePlugin || rootObjectHasEmptySize) {
+                // Important to do this before setContent
+                m_fallbackView->setResizeMode(QQuickView::SizeRootObjectToView);
+            }
+            m_fallbackView->setContent(url, component.take(), m_object);
+            m_activeWindow = m_fallbackView;
+        } else {
+            QQmlError error;
+            error.setObject(m_object);
+            error.setUrl(url);
+            error.setLine(0);
+            error.setColumn(0);
+            error.setDescription(tr("LiveNodeEngine: Cannot display this component: "
+                                    "Root object is not a QQuickWindow and no LiveNodeEngine::fallbackView set."));
+            emit logErrors(QList<QQmlError>() << error);
+            m_activeWindow = 0;
+        }
     } else {
-        view->setContent(url, m_windowComponent, m_windowObject);
+        QList<QQmlError> errors = component->errors();
+        if (!errors.isEmpty()) {
+            emit logErrors(errors);
+            if (m_fallbackView) {
+                m_fallbackView->setSource(errorScreenUrl());
+                m_activeWindow = m_fallbackView;
+            }
+        }
     }
 
-    //emit logIgnoreMessages(false);
+    if (m_activeWindow) {
+        if (!previousGeometry.isNull()) {
+            m_activeWindow->setPosition(previousGeometry.topLeft());
+        }
 
-    QList<QQmlError> errors = view->errors();
-    if (!errors.isEmpty()) {
-        emit logErrors(errors);
-        if (m_quickFeatures.testFlag(ContentAdapterInterface::QtQuickControls))
-            view->setSource(QUrl("qrc:/livert/error_qt5_controls.qml"));
-        view->setSource(QUrl("qrc:/livert/error_qt5.qml"));
+        m_activeWindowConnections << connect(m_activeWindow, &QWindow::widthChanged,
+                                             this, &LiveNodeEngine::onSizeChanged);
+        m_activeWindowConnections << connect(m_activeWindow, &QWindow::heightChanged,
+                                             this, &LiveNodeEngine::onSizeChanged);
+        onSizeChanged();
     }
 
-    if (m_mode == RecreateView)
-        view->setVisible(true);
+    emit documentLoaded();
+    emit activeWindowChanged(m_activeWindow);
 
-    if (m_activePlugin || (view->rootObject() && QSize(view->rootObject()->width(), view->rootObject()->height()).isEmpty())) {
-        view->setResizeMode(QQuickView::SizeRootObjectToView);
-    } else {
-        view->setResizeMode(QQuickView::SizeViewToRootObject);
+    // Delay showing the window after activeWindowChanged is emitted. This is
+    // required by WindowWidget - embedding a window fails if it was shown
+    // before.
+    if (m_activeWindow) {
+        m_activeWindow->show();
     }
 }
 
@@ -371,10 +338,7 @@ QUrl LiveNodeEngine::queryDocumentViewer(const QUrl& url)
 
             m_activePlugin = adapter;
 
-            if (m_mode == RecreateView)
-                return adapter->adapt(url, m_recreateView->rootContext());
-            else
-                return adapter->adapt(url, m_view->rootContext());
+            return adapter->adapt(url, m_qmlEngine->rootContext());
         }
     }
 
@@ -402,28 +366,15 @@ void LiveNodeEngine::setActiveDocument(const QString &document)
  * Sets the current workspace to \a path. Documents location will be adjusted based on
  * this workspace path.
  */
-void LiveNodeEngine::setWorkspace(const QString &path)
+void LiveNodeEngine::setWorkspace(const QString &path, WorkspaceOptions options)
 {
+    Q_ASSERT(qmlEngine());
+
     m_workspace = QDir(path);
-}
 
-/*!
- * Sets the import paths \a paths on the scene
- */
-void LiveNodeEngine::setImportPaths(const QStringList &paths)
-{
-    m_importPaths = paths;
-
-    if (m_view)
-        m_view->engine()->setImportPathList(paths);
-}
-
-/*!
- * Returns the current import paths of the scene
- */
-QStringList LiveNodeEngine::importPaths() const
-{
-    return m_importPaths;
+    if (options & LoadDummyData) {
+        QmlHelper::loadDummyData(m_qmlEngine, m_workspace.absolutePath());
+    }
 }
 
 /*!
@@ -461,21 +412,9 @@ ContentAdapterInterface *LiveNodeEngine::activePlugin() const
     return m_activePlugin;
 }
 
-/*!
- * Enables the reloading of native plugins when \a enabled set to true. Use
- * with care as native plugins tend to crash on reload.
- */
-void LiveNodeEngine::setReloadPluginsEnabled(bool enabled)
+QQuickWindow *LiveNodeEngine::activeWindow() const
 {
-    m_reloadPlugins = enabled;
-}
-
-/*!
- * Returns true when the active plugins reloading is enabled, otherwise false
- */
-bool LiveNodeEngine::isReloadPluginsEnabled() const
-{
-    return m_reloadPlugins;
+    return m_activeWindow;
 }
 
 /*!
@@ -492,44 +431,15 @@ void LiveNodeEngine::initPlugins()
 }
 
 /*!
- * Handle \a status changes and emit the document loaded signal.
- */
-void LiveNodeEngine::onStatusChanged(QQuickView::Status status)
-{
-    if (status == QQuickView::Ready ||
-        status == QQuickView::Error) {
-        emit documentLoaded();
-    }
-}
-
-/*!
- * Initializes a new view
- */
-QQuickView *LiveNodeEngine::initView()
-{
-    QQuickView *view = new QQuickView();
-    emit viewChanged(view);
-    return view;
-}
-
-/*!
  * Handles size changes and updates the view according
  */
 void LiveNodeEngine::onSizeChanged()
 {
-    int width = -1, height = -1;
+    Q_ASSERT(m_activeWindow != 0);
 
-    if (m_mode == RecreateView && m_recreateView) {
-        width = m_recreateView->width();
-        height = m_recreateView->height();
-    } else if (m_mode == ReloadDocument && m_view) {
-        width = m_view->width();
-        height = m_view->height();
-    }
-
-    if (width != -1 && height != -1) {
-        m_runtime->setScreenWidth(width);
-        m_runtime->setScreenHeight(height);
+    if (m_activeWindow->width() != -1 && m_activeWindow->height() != -1) {
+        m_runtime->setScreenWidth(m_activeWindow->width());
+        m_runtime->setScreenHeight(m_activeWindow->height());
     }
 
     setRotation(m_rotation);
@@ -560,9 +470,9 @@ void LiveNodeEngine::onSizeChanged()
  */
 
 /*!
- * \fn void LiveNodeEngine::viewChanged(QQuickView *view)
+ * \fn void LiveNodeEngine::activeWindowChanged(QQuickWindow *window)
  *
- * The signal is emitted when the view pointer \a view has changed (e.g by initializing a new view)
+ * The signal is emitted when the activeWindow has changed by changing or reloading the document.
  */
 
 /*!
