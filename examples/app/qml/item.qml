@@ -47,7 +47,7 @@ ListView {
         Text {
             x: 25
             text: model.modelData
-            color: "white"
+            color: "whitet"
         }
     }
 }
