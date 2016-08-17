@@ -106,7 +106,10 @@ int main (int argc, char** argv)
     fflush(stdout);
 
     //dbgf = fopen("C:\\Qt\\pg.log", "w");
-    return app.exec();
+    dbgf = fopen("pg.log", "w");
+    int rv = app.exec();
+    if (dbgf) { fprintf(dbgf, "PG: EXITING\n"); fflush(dbgf); }
+    return rv;
 }
 
 void handlePreview(QLocalSocket *socket)

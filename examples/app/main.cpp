@@ -48,7 +48,7 @@ public:
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
-    app.setQuitOnLastWindowClosed(false);
+    //app.setQuitOnLastWindowClosed(false);
 
     MyQmlEngine qmlEngine;
     QQuickView fallbackView(&qmlEngine, 0);
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
     // Allow it to display QML components with non-QQuickWindow root object
     node.setFallbackView(&fallbackView);
     // Tell it where file updates should be stored relative to
-    node.setWorkspace(".");
+    node.setWorkspace(".", LiveNodeEngine::LoadDummyData);
     // For local usage use the LocalPublisher
     RemoteReceiver receiver;
     receiver.registerNode(&node);
