@@ -74,6 +74,9 @@ void QmlHelper::loadDummyData(QQmlEngine *engine, const QString &workspace)
             entry.chop(4);
             engine->rootContext()->setContextProperty(entry, obj);
             obj->setParent(engine);
+            connect(obj, &QObject::destroyed, [obj]() {
+                    qWarning() << "XXXX DESTROYED" << obj;
+                });
         }
     }
 }

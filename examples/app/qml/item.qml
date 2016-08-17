@@ -46,8 +46,15 @@ ListView {
         }
         Text {
             x: 25
-            text: model.modelData
+            text: model.modelData + Foo.barRO
             color: "white"
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                       console.log("clicked")
+                       Foo.barRW += 1
+                       }
         }
     }
 }
