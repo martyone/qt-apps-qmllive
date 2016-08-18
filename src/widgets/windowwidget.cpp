@@ -45,6 +45,8 @@ WindowWidget::WindowWidget(QWidget *parent) :
 
 void WindowWidget::setHostedWindow(QQuickWindow *hostedWindow)
 {
+    //qWarning() << "XXX" << m_hostedWindow << hostedWindow;
+
     if (m_hostedWindow == hostedWindow) {
         return;
     }
@@ -132,6 +134,7 @@ void WindowWidget::forceInitialResize()
 {
     if (QQuickView *view = qobject_cast<QQuickView *>(m_hostedWindow)) {
         if (view->resizeMode() == QQuickView::SizeRootObjectToView) {
+            //qWarning() << "FORCE INITIAL RESIZE" << m_hostedWindow << size();
             view->resize(size());
         }
     }
@@ -199,6 +202,7 @@ bool WindowWidget::event(QEvent *e)
             QResizeEvent *re = static_cast<QResizeEvent*>(e);
             if (QQuickView *view = qobject_cast<QQuickView *>(m_hostedWindow)) {
                 if (view->resizeMode() == QQuickView::SizeRootObjectToView) {
+                    //qWarning() << "PASS RESIZE EVENT" << m_hostedWindow;
                     view->resize(re->size());
                 }
             }
@@ -284,6 +288,8 @@ void WindowWidget::updateWindowPosition()
         //qWarning() << "xAlign:" << aligned.x() << "xScrolled:" << scrolled.x();
         m_hostedWindow->setPosition(wSize.width() < viewport()->width() ? aligned.x() : scrolled.x(),
                                     wSize.height() < viewport()->height() ? aligned.y() : scrolled.y());
+        //} else {
+        //qWarning() << "CAN'T ALIGN";
     }
 }
 
@@ -291,9 +297,12 @@ QSize WindowWidget::qmlSize() const
 {
     QSize s;
     if (m_hostedWindow && !m_hostedWindow->contentItem()->childItems().isEmpty()) {
+        //qDebug() << "YYY" << m_hostedWindow->contentItem()->childItems();
         QQuickItem *const rootItem = m_hostedWindow->contentItem()->childItems().first();
         s = QSize(rootItem->width(), rootItem->height());
     }
+
+    //qWarning() << "XXX" << s;
 
     if (s.width() <= 20)
         s.setWidth(800);

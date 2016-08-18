@@ -59,6 +59,7 @@ LiveRuntime::LiveRuntime(QObject *parent) :
  */
 void LiveRuntime::setScreenWidth(qreal arg)
 {
+    //qWarning() << "WIDTH" << arg;
     if (m_screenWidth != arg) {
         m_screenWidth = arg;
         emit screenWidthChanged(arg);
@@ -70,6 +71,7 @@ void LiveRuntime::setScreenWidth(qreal arg)
  */
 void LiveRuntime::setScreenHeight(qreal arg)
 {
+    //qWarning() << "HEIGHT" << arg;
     if (m_screenHeight != arg) {
         m_screenHeight = arg;
         emit screenHeightChanged(arg);

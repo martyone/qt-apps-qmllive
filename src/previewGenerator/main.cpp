@@ -108,7 +108,11 @@ int main (int argc, char** argv)
 
     QTextStream(stdout) << QLatin1String("ready#") << preview.serverName().toUtf8().toHex() << endl;
 
-    return app.exec();
+    int rv = app.exec();
+
+    qCDebug(pg) << "Exiting";
+
+    return rv;
 }
 
 void handlePreview(QLocalSocket *socket)
