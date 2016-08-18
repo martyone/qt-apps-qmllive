@@ -281,7 +281,7 @@ void LiveNodeEngine::reloadDocument()
 
     checkQmlFeatures();
 
-    emit logClear();
+    emit clearLog();
 
     const QUrl url = queryDocumentViewer(m_activeFile);
 
@@ -501,7 +501,7 @@ void LiveNodeEngine::onSizeChanged()
  */
 
 /*!
- * \fn void LiveNodeEngine::logClear()
+ * \fn void LiveNodeEngine::clearLog()
  *
  * Requested to clear the log
  */
