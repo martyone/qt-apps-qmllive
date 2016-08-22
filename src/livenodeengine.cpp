@@ -47,6 +47,50 @@
 #define DEBUG if (0) qDebug()
 #endif
 
+class SandboxingUrlInterceptor : public QObject, public QQmlAbstractUrlInterceptor
+{
+    Q_OBJECT
+
+public:
+    SandboxingUrlInterceptor(const QString &workspacePath,
+                             QQmlAbstractUrlInterceptor *otherInterceptor, QObject *parent)
+        : QObject(parent)
+        , m_workspace(workspacePath)
+        , m_otherInterceptor(otherInterceptor)
+    {
+        Q_ASSERT(!workspacePath.isEmpty());
+    }
+
+    QString reserve(const QString &document)
+    {
+        QWriteLocker locker(&m_lock);
+
+        QString sandboxedPath = QDir(m_sandbox.path()).absoluteFilePath(document);
+        m_reservedDocuments.insert(QUrl::fromLocalFile(m_workspace.absoluteFilePath(document)),
+                                   QUrl::fromLocalFile(sandboxedPath));
+        return sandboxedPath;
+
+    }
+
+    // From QQmlAbstractUrlInterceptor
+    QUrl intercept(const QUrl &url, DataType type) Q_DECL_OVERRIDE
+    {
+        Q_UNUSED(type);
+
+        QReadLocker locker(&m_lock);
+
+        const QUrl url_ = m_otherInterceptor ? m_otherInterceptor->intercept(url, type) : url;
+        return m_reservedDocuments.value(url_, url_);
+    }
+
+private:
+    QReadWriteLock m_lock;
+    QDir m_workspace;
+    QQmlAbstractUrlInterceptor *m_otherInterceptor;
+    QTemporaryDir m_sandbox;
+    QHash<QUrl, QUrl> m_reservedDocuments;
+};
+
 /*!
  * \class LiveNodeEngine
  * \brief The LiveNodeEngine class instantiates QML components in cooperation with LiveHubEngine.
@@ -78,6 +122,9 @@
  *          "dummydata" subdirectory of the workspace directory.
  *   \value AllowUpdates
  *          Enables receiving updates to workspace documents.
+ *   \value OverwriteFiles
+ *          Enables overwriting files in workspace. When disabled, updates are
+ *          stored in a temporary directory and file I/O is redirected there.
  */
 
 /*!
@@ -365,9 +412,12 @@ void LiveNodeEngine::updateDocument(const QString &document, const QByteArray &c
         return;
     }
 
-    QString filePath = m_workspace.absoluteFilePath(document);
+    QString filePath = m_workspaceOptions & OverwriteFiles
+        ? m_workspace.absoluteFilePath(document)
+        : m_sandboxer->reserve(document);
+
     QString dirPath = QFileInfo(filePath).absoluteDir().absolutePath();
-    m_workspace.mkpath(dirPath);
+    QDir().mkpath(dirPath);
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly)) {
         qWarning() << "Unable to save file: " << file.errorString();
@@ -435,11 +485,19 @@ void LiveNodeEngine::setWorkspace(const QString &path, WorkspaceOptions options)
 {
     Q_ASSERT(qmlEngine());
 
+    if ((m_workspaceOptions & OverwriteFiles) && !(m_workspaceOptions & AllowUpdates))
+        qWarning() << "Setting OverwriteFiles has not effect unless AllowUpdates is set";
+
     m_workspace = QDir(path);
     m_workspaceOptions = options;
 
     if (m_workspaceOptions & LoadDummyData)
         QmlHelper::loadDummyData(m_qmlEngine, m_workspace.absolutePath());
+
+    if ((m_workspaceOptions & AllowUpdates) && !(m_workspaceOptions & OverwriteFiles)) {
+        m_sandboxer = new SandboxingUrlInterceptor(path, qmlEngine()->urlInterceptor(), this);
+        qmlEngine()->setUrlInterceptor(m_sandboxer);
+    }
 
     emit workspaceChanged(workspace());
 }
@@ -560,3 +618,5 @@ void LiveNodeEngine::onSizeChanged()
  *
  * \sa workspace()
  */
+
+#include "livenodeengine.moc"
