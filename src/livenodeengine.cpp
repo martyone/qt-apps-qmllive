@@ -47,25 +47,43 @@
 #define DEBUG if (0) qDebug()
 #endif
 
+namespace {
+const char *const SANDBOX_PATH_PREFIX = "qmllive-";
+const char SANDBOX_PATH_SEPARATOR = '-';
+}
+
 class SandboxingUrlInterceptor : public QObject, public QQmlAbstractUrlInterceptor
 {
     Q_OBJECT
 
 public:
-    SandboxingUrlInterceptor(const QString &workspacePath,
+    SandboxingUrlInterceptor(const QString &workspacePath, const QString &sandboxPath,
                              QQmlAbstractUrlInterceptor *otherInterceptor, QObject *parent)
         : QObject(parent)
         , m_workspace(workspacePath)
+        , m_sandbox(sandboxPath)
         , m_otherInterceptor(otherInterceptor)
     {
         Q_ASSERT(!workspacePath.isEmpty());
+        Q_ASSERT(!sandboxPath.isEmpty());
+
+        QDirIterator it(m_sandbox.absolutePath(), QDir::AllEntries | QDir::NoDotAndDotDot,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            QString sandboxedPath = it.next();
+            QString document = m_sandbox.relativeFilePath(sandboxedPath);
+            m_reservedDocuments.insert(QUrl::fromLocalFile(m_workspace.absoluteFilePath(document)),
+                                       QUrl::fromLocalFile(sandboxedPath));
+        }
     }
+
+    QDir sandbox() const { return m_sandbox; }
 
     QString reserve(const QString &document)
     {
         QWriteLocker locker(&m_lock);
 
-        QString sandboxedPath = QDir(m_sandbox.path()).absoluteFilePath(document);
+        QString sandboxedPath = m_sandbox.absoluteFilePath(document);
         m_reservedDocuments.insert(QUrl::fromLocalFile(m_workspace.absoluteFilePath(document)),
                                    QUrl::fromLocalFile(sandboxedPath));
         return sandboxedPath;
@@ -86,8 +104,8 @@ public:
 private:
     QReadWriteLock m_lock;
     QDir m_workspace;
+    QDir m_sandbox;
     QQmlAbstractUrlInterceptor *m_otherInterceptor;
-    QTemporaryDir m_sandbox;
     QHash<QUrl, QUrl> m_reservedDocuments;
 };
 
@@ -125,6 +143,9 @@ private:
  *   \value OverwriteFiles
  *          Enables overwriting files in workspace. When disabled, updates are
  *          stored in a temporary directory and file I/O is redirected there.
+ *   \value PersistentSandbox
+ *          With this option enabled, received updates will be preserved between
+ *          executions even if OverwriteFiles is not enabled.
  */
 
 /*!
@@ -143,6 +164,14 @@ LiveNodeEngine::LiveNodeEngine(QObject *parent)
     m_delayReload->setInterval(250);
     m_delayReload->setSingleShot(true);
     connect(m_delayReload, SIGNAL(timeout()), this, SLOT(reloadDocument()));
+}
+
+/*!
+ * Destructor
+ */
+LiveNodeEngine::~LiveNodeEngine()
+{
+    destroySandbox();
 }
 
 /*!
@@ -488,18 +517,62 @@ void LiveNodeEngine::setWorkspace(const QString &path, WorkspaceOptions options)
     if ((m_workspaceOptions & OverwriteFiles) && !(m_workspaceOptions & AllowUpdates))
         qWarning() << "Setting OverwriteFiles has not effect unless AllowUpdates is set";
 
+    if ((m_workspaceOptions & PersistentSandbox) && !(m_workspaceOptions & AllowUpdates))
+        qWarning() << "Setting PersistentSandbox has not effect unless AllowUpdates is set";
+
+    if ((m_workspaceOptions & PersistentSandbox) && (m_workspaceOptions & OverwriteFiles))
+        qWarning() << "Setting PersistentSandbox has not effect when OverwriteFiles is set";
+
     m_workspace = QDir(path);
     m_workspaceOptions = options;
 
     if (m_workspaceOptions & LoadDummyData)
         QmlHelper::loadDummyData(m_qmlEngine, m_workspace.absolutePath());
 
-    if ((m_workspaceOptions & AllowUpdates) && !(m_workspaceOptions & OverwriteFiles)) {
-        m_sandboxer = new SandboxingUrlInterceptor(path, qmlEngine()->urlInterceptor(), this);
-        qmlEngine()->setUrlInterceptor(m_sandboxer);
-    }
+    if ((m_workspaceOptions & AllowUpdates) && !(m_workspaceOptions & OverwriteFiles))
+        initSandbox();
 
     emit workspaceChanged(workspace());
+}
+
+void LiveNodeEngine::initSandbox()
+{
+    QSettings settings;
+    QString sandboxBasePath = QDir::tempPath() + QLatin1String(SANDBOX_PATH_PREFIX);
+    if (!settings.organizationName().isEmpty()) // See QCoreApplication::organizationName's docs
+        sandboxBasePath += settings.organizationName() + QLatin1Char(SANDBOX_PATH_SEPARATOR);
+    sandboxBasePath += settings.applicationName();
+
+    QString sandboxPath;
+    if (m_workspaceOptions & PersistentSandbox) {
+        sandboxPath = sandboxBasePath;
+        if (!QDir().mkpath(sandboxPath))
+            qFatal("Failed to create (persistent) sandbox directory");
+    } else {
+        // Allow cleaning the persistent sandbox by executing once without persistence enabled
+        if (!QDir(sandboxBasePath).removeRecursively())
+            qWarning() << "Failed to remove (persistent) sandbox directory";
+        // With temporary sandbox allow parallel execution
+        QTemporaryDir sandbox(sandboxBasePath);
+        if (!sandbox.isValid())
+            qFatal("Failed to create (temporary) sandbox directory: %s", qPrintable(sandbox.errorString()));
+        sandbox.setAutoRemove(false);
+        sandboxPath = sandbox.path();
+    }
+
+    m_sandboxer = new SandboxingUrlInterceptor(m_workspace.path(), sandboxPath, qmlEngine()->urlInterceptor(), this);
+    qmlEngine()->setUrlInterceptor(m_sandboxer);
+}
+
+void LiveNodeEngine::destroySandbox()
+{
+    if (!(m_workspaceOptions & PersistentSandbox)) {
+        // Better be paranoid than sorry.
+        bool safe = m_sandboxer->sandbox().absolutePath().startsWith(QDir::tempPath() + QDir::separator());
+        Q_ASSERT(safe);
+        if (!safe || !m_sandboxer->sandbox().removeRecursively())
+            qWarning() << "Failed to remove (temporary) sandbox directory";
+    }
 }
 
 /*!
