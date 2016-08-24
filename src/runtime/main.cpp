@@ -45,6 +45,7 @@ struct Options
     Options()
         : ipcPort(10234)
         , allowOverwriteFiles(true)
+        , persistentOverlay(false)
         , fullscreen(false)
         , transparent(false)
         , frameless(false)
@@ -52,6 +53,7 @@ struct Options
     {}
     int ipcPort;
     bool allowOverwriteFiles;
+    bool persistentOverlay;
     QString activeDocument;
     QString workspace;
     QString pluginPath;
@@ -90,6 +92,10 @@ static void parseArguments(const QStringList &arguments)
                                               "store updates in a writable overlay");
     parser.addOption(noOverwriteFilesOption);
 
+    QCommandLineOption persistentOverlayOption("persistent-overlay", "keep received updates between executions "
+                                               "(to be used together with --no-overwrite-files)");
+    parser.addOption(persistentOverlayOption);
+
     QCommandLineOption fullScreenOption("fullscreen", "shows in fullscreen mode");
     parser.addOption(fullScreenOption);
 
@@ -108,6 +114,7 @@ static void parseArguments(const QStringList &arguments)
     options.importPaths = parser.values(importPathOption);
     options.stayontop = parser.isSet(stayOnTopOption);
     options.allowOverwriteFiles = !parser.isSet(noOverwriteFilesOption);
+    options.persistentOverlay = parser.isSet(persistentOverlayOption);
     options.fullscreen = parser.isSet(fullScreenOption);
     options.transparent = parser.isSet(transparentOption);
     options.frameless = parser.isSet(framelessOption);
@@ -174,6 +181,8 @@ int main(int argc, char** argv)
     LiveNodeEngine::WorkspaceOptions workspaceOptions = LiveNodeEngine::LoadDummyData | LiveNodeEngine::AllowUpdates;
     if (options.allowOverwriteFiles)
         workspaceOptions |= LiveNodeEngine::OverwriteFiles;
+    if (options.persistentOverlay)
+        workspaceOptions |= LiveNodeEngine::PersistentOverlay;
 
     RuntimeLiveNodeEngine engine;
     engine.setQmlEngine(&qmlEngine);
