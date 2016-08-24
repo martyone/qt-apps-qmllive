@@ -47,25 +47,43 @@
 #define DEBUG if (0) qDebug()
 #endif
 
+namespace {
+const char *const OVERLAY_PATH_PREFIX = "qml-live-overlay--";
+const char OVERLAY_PATH_SEPARATOR = '-';
+}
+
 class OverlayUrlInterceptor : public QObject, public QQmlAbstractUrlInterceptor
 {
     Q_OBJECT
 
 public:
-    OverlayUrlInterceptor(const QString &basePath,
+    OverlayUrlInterceptor(const QString &basePath, const QString &overlayPath,
                           QQmlAbstractUrlInterceptor *otherInterceptor, QObject *parent)
         : QObject(parent)
         , m_base(basePath)
+        , m_overlay(overlayPath)
         , m_otherInterceptor(otherInterceptor)
     {
         Q_ASSERT(!basePath.isEmpty());
+        Q_ASSERT(!overlayPath.isEmpty());
+
+        QDirIterator it(m_overlay.absolutePath(), QDir::AllEntries | QDir::NoDotAndDotDot,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            QString overlayingPath = it.next();
+            QString document = m_overlay.relativeFilePath(overlayingPath);
+            m_mappings.insert(QUrl::fromLocalFile(m_base.absoluteFilePath(document)),
+                              QUrl::fromLocalFile(overlayingPath));
+        }
     }
+
+    QDir overlay() const { return m_overlay; }
 
     QString reserve(const QString &document)
     {
         QWriteLocker locker(&m_lock);
 
-        QString overlayingPath = QDir(m_overlay.path()).absoluteFilePath(document);
+        QString overlayingPath = m_overlay.absoluteFilePath(document);
         m_mappings.insert(QUrl::fromLocalFile(m_base.absoluteFilePath(document)),
                           QUrl::fromLocalFile(overlayingPath));
         return overlayingPath;
@@ -85,8 +103,8 @@ public:
 private:
     QReadWriteLock m_lock;
     QDir m_base;
+    QDir m_overlay;
     QQmlAbstractUrlInterceptor *m_otherInterceptor;
-    QTemporaryDir m_overlay;
     QHash<QUrl, QUrl> m_mappings;
 };
 
@@ -126,6 +144,10 @@ private:
  *          is read only. Updates will be stored in a writable overlay stacked
  *          over the original workspace with the help of
  *          QQmlAbstractUrlInterceptor.
+ *   \value PersistentOverlay
+ *          With this option enabled, updates stored in an overlay will be
+ *          preserved between executions even if \l UpdatesAsOverlay is not
+ *          enabled.
  *
  * \sa {QmlLive Runtime}
  */
@@ -146,6 +168,14 @@ LiveNodeEngine::LiveNodeEngine(QObject *parent)
     m_delayReload->setInterval(250);
     m_delayReload->setSingleShot(true);
     connect(m_delayReload, SIGNAL(timeout()), this, SLOT(reloadDocument()));
+}
+
+/*!
+ * Destructor
+ */
+LiveNodeEngine::~LiveNodeEngine()
+{
+    destroyOverlay();
 }
 
 /*!
@@ -491,18 +521,59 @@ void LiveNodeEngine::setWorkspace(const QString &path, WorkspaceOptions options)
     if ((m_workspaceOptions & UpdatesAsOverlay) && !(m_workspaceOptions & AllowUpdates))
         qWarning() << "Setting UpdatesAsOverlay has not effect when AllowUpdates is not set";
 
+    if ((m_workspaceOptions & PersistentOverlay) && !(m_workspaceOptions & UpdatesAsOverlay))
+        qWarning() << "Setting PersistentOverlay has not effect when UpdatesAsOverlay is not set";
+
     m_workspace = QDir(path);
     m_workspaceOptions = options;
 
     if (m_workspaceOptions & LoadDummyData)
         QmlHelper::loadDummyData(m_qmlEngine, m_workspace.absolutePath());
 
-    if ((m_workspaceOptions & AllowUpdates) && (m_workspaceOptions & UpdatesAsOverlay)) {
-        m_overlayUrlInterceptor = new OverlayUrlInterceptor(path, qmlEngine()->urlInterceptor(), this);
-        qmlEngine()->setUrlInterceptor(m_overlayUrlInterceptor);
-    }
+    if ((m_workspaceOptions & AllowUpdates) && (m_workspaceOptions & UpdatesAsOverlay))
+        initOverlay();
 
     emit workspaceChanged(workspace());
+}
+
+void LiveNodeEngine::initOverlay()
+{
+    QSettings settings;
+    QString overlayBasePath = QDir::tempPath() + QDir::separator() + QLatin1String(OVERLAY_PATH_PREFIX);
+    if (!settings.organizationName().isEmpty()) // See QCoreApplication::organizationName's docs
+        overlayBasePath += settings.organizationName() + QLatin1Char(OVERLAY_PATH_SEPARATOR);
+    overlayBasePath += settings.applicationName();
+
+    QString overlayPath;
+    if (m_workspaceOptions & PersistentOverlay) {
+        overlayPath = overlayBasePath;
+        if (!QDir().mkpath(overlayPath))
+            qFatal("Failed to create (persistent) overlay directory");
+    } else {
+        // Allow cleaning the persistent overlay by executing once without persistence enabled
+        if (!QDir(overlayBasePath).removeRecursively())
+            qWarning() << "Failed to remove (persistent) overlay directory";
+        // With temporary overlay allow parallel execution
+        QTemporaryDir overlay(overlayBasePath);
+        if (!overlay.isValid())
+            qFatal("Failed to create (temporary) overlay directory: %s", qPrintable(overlay.errorString()));
+        overlay.setAutoRemove(false);
+        overlayPath = overlay.path();
+    }
+
+    m_overlayUrlInterceptor = new OverlayUrlInterceptor(m_workspace.path(), overlayPath, qmlEngine()->urlInterceptor(), this);
+    qmlEngine()->setUrlInterceptor(m_overlayUrlInterceptor);
+}
+
+void LiveNodeEngine::destroyOverlay()
+{
+    if (!(m_workspaceOptions & PersistentOverlay)) {
+        // Better be paranoid than sorry.
+        bool safe = m_overlayUrlInterceptor->overlay().absolutePath().startsWith(QDir::tempPath() + QDir::separator());
+        Q_ASSERT(safe);
+        if (!safe || !m_overlayUrlInterceptor->overlay().removeRecursively())
+            qWarning() << "Failed to remove (temporary) overlay directory";
+    }
 }
 
 /*!
