@@ -38,7 +38,7 @@
 
 class LiveRuntime;
 class ContentPluginFactory;
-class SandboxingUrlInterceptor;
+class StackingUrlInterceptor;
 
 class LiveNodeEngine : public QObject
 {
@@ -117,6 +117,7 @@ private:
     QUrl queryDocumentViewer(const QUrl& url);
     void initSandbox();
     void destroySandbox();
+    QString writableLocation(const QString &document);
 
 private:
     int m_xOffset;
@@ -130,7 +131,7 @@ private:
     QList<QMetaObject::Connection> m_activeWindowConnections;
     QDir m_workspace;
     WorkspaceOptions m_workspaceOptions;
-    QPointer<SandboxingUrlInterceptor> m_sandboxer;
+    QPointer<StackingUrlInterceptor> m_sandboxer;
     QTimer *m_delayReload;
 
     ContentPluginFactory* m_pluginFactory;

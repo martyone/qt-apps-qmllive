@@ -52,12 +52,12 @@ const char *const SANDBOX_PATH_PREFIX = "qmllive-";
 const char SANDBOX_PATH_SEPARATOR = '-';
 }
 
-class SandboxingUrlInterceptor : public QObject, public QQmlAbstractUrlInterceptor
+class StackingUrlInterceptor : public QObject, public QQmlAbstractUrlInterceptor
 {
     Q_OBJECT
 
 public:
-    SandboxingUrlInterceptor(const QString &workspacePath, const QString &sandboxPath,
+    StackingUrlInterceptor(const QString &workspacePath, const QString &sandboxPath,
                              QQmlAbstractUrlInterceptor *otherInterceptor, QObject *parent)
         : QObject(parent)
         , m_workspace(workspacePath)
@@ -441,9 +441,7 @@ void LiveNodeEngine::updateDocument(const QString &document, const QByteArray &c
         return;
     }
 
-    QString filePath = m_workspaceOptions & OverwriteFiles
-        ? m_workspace.absoluteFilePath(document)
-        : m_sandboxer->reserve(document);
+    QString filePath = writableLocation(document);
 
     QString dirPath = QFileInfo(filePath).absoluteDir().absolutePath();
     QDir().mkpath(dirPath);
@@ -560,7 +558,7 @@ void LiveNodeEngine::initSandbox()
         sandboxPath = sandbox.path();
     }
 
-    m_sandboxer = new SandboxingUrlInterceptor(m_workspace.path(), sandboxPath, qmlEngine()->urlInterceptor(), this);
+    m_sandboxer = new StackingUrlInterceptor(m_workspace.path(), sandboxPath, qmlEngine()->urlInterceptor(), this);
     qmlEngine()->setUrlInterceptor(m_sandboxer);
 }
 
@@ -575,6 +573,13 @@ void LiveNodeEngine::destroySandbox()
     }
 }
 
+QString LiveNodeEngine::writableLocation(const QString &document)
+{
+    if (m_workspaceOptions & OverwriteFiles)
+        return m_workspace.absoluteFilePath(document);
+
+
+}
 /*!
  * Sets the pluginPath to \a path.
  *
