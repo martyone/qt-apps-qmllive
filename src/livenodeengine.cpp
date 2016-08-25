@@ -139,13 +139,17 @@ private:
  *          "dummydata" subdirectory of the workspace directory.
  *   \value AllowUpdates
  *          Enables receiving updates to workspace documents.
- *   \value OverwriteFiles
- *          Enables overwriting files in workspace. When disabled, updates are
- *          stored in a writable overlay stacked over the original workspace
- *          with the help of QQmlAbstractUrlInterceptor.
+ *   \value UpdatesAsOverlay
+ *          With this option enabled, updates can be received even if workspace
+ *          is read only. Updates will be stored in a writable overlay stacked
+ *          over the original workspace with the help of
+ *          QQmlAbstractUrlInterceptor.
  *   \value PersistentOverlay
- *          With this option enabled, received updates will be preserved between
- *          executions even if OverwriteFiles is not enabled.
+ *          With this option enabled, updates stored in an overlay will be
+ *          preserved between executions even if \l UpdatesAsOverlay is not
+ *          enabled.
+ *
+ * \sa {QmlLive Runtime}
  */
 
 /*!
@@ -441,9 +445,9 @@ void LiveNodeEngine::updateDocument(const QString &document, const QByteArray &c
         return;
     }
 
-    QString filePath = (m_workspaceOptions & OverwriteFiles)
-        ? m_workspace.absoluteFilePath(document)
-        : m_overlayUrlInterceptor->reserve(document);
+    QString filePath = (m_workspaceOptions & UpdatesAsOverlay)
+        ? m_overlayUrlInterceptor->reserve(document)
+        : m_workspace.absoluteFilePath(document);
 
     QString dirPath = QFileInfo(filePath).absoluteDir().absolutePath();
     QDir().mkpath(dirPath);
@@ -514,14 +518,11 @@ void LiveNodeEngine::setWorkspace(const QString &path, WorkspaceOptions options)
 {
     Q_ASSERT(qmlEngine());
 
-    if ((m_workspaceOptions & OverwriteFiles) && !(m_workspaceOptions & AllowUpdates))
-        qWarning() << "Setting OverwriteFiles has not effect unless AllowUpdates is set";
+    if ((m_workspaceOptions & UpdatesAsOverlay) && !(m_workspaceOptions & AllowUpdates))
+        qWarning() << "Setting UpdatesAsOverlay has not effect when AllowUpdates is not set";
 
-    if ((m_workspaceOptions & PersistentOverlay) && !(m_workspaceOptions & AllowUpdates))
-        qWarning() << "Setting PersistentOverlay has not effect unless AllowUpdates is set";
-
-    if ((m_workspaceOptions & PersistentOverlay) && (m_workspaceOptions & OverwriteFiles))
-        qWarning() << "Setting PersistentOverlay has not effect when OverwriteFiles is set";
+    if ((m_workspaceOptions & PersistentOverlay) && !(m_workspaceOptions & UpdatesAsOverlay))
+        qWarning() << "Setting PersistentOverlay has not effect when UpdatesAsOverlay is not set";
 
     m_workspace = QDir(path);
     m_workspaceOptions = options;
@@ -529,7 +530,7 @@ void LiveNodeEngine::setWorkspace(const QString &path, WorkspaceOptions options)
     if (m_workspaceOptions & LoadDummyData)
         QmlHelper::loadDummyData(m_qmlEngine, m_workspace.absolutePath());
 
-    if ((m_workspaceOptions & AllowUpdates) && !(m_workspaceOptions & OverwriteFiles))
+    if ((m_workspaceOptions & AllowUpdates) && (m_workspaceOptions & UpdatesAsOverlay))
         initOverlay();
 
     emit workspaceChanged(workspace());

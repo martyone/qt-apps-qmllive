@@ -44,7 +44,7 @@ struct Options
 {
     Options()
         : ipcPort(10234)
-        , allowOverwriteFiles(true)
+        , updatesAsOverlay(true)
         , persistentOverlay(false)
         , fullscreen(false)
         , transparent(false)
@@ -52,7 +52,7 @@ struct Options
         , stayontop(false)
     {}
     int ipcPort;
-    bool allowOverwriteFiles;
+    bool updatesAsOverlay;
     bool persistentOverlay;
     QString activeDocument;
     QString workspace;
@@ -88,12 +88,12 @@ static void parseArguments(const QStringList &arguments)
     QCommandLineOption stayOnTopOption("stayontop", "keep viewer window on top");
     parser.addOption(stayOnTopOption);
 
-    QCommandLineOption noOverwriteFilesOption("no-overwrite-files", "do not write to workspace files on changes - "
-                                              "store updates in a writable overlay");
-    parser.addOption(noOverwriteFilesOption);
+    QCommandLineOption updatesAsOverlayOption("updates-as-overlay", "allow to receive updates even if workspace is "
+                                              "readonly - store updates in a writable overlay");
+    parser.addOption(updatesAsOverlayOption);
 
-    QCommandLineOption persistentOverlayOption("persistent-overlay", "keep received updates between executions "
-                                               "(to be used together with --no-overwrite-files)");
+    QCommandLineOption persistentOverlayOption("persistent-overlay", "keep updates stored in an overlay between "
+                                               "executions (to be used together with '--updates-as-overlay')");
     parser.addOption(persistentOverlayOption);
 
     QCommandLineOption fullScreenOption("fullscreen", "shows in fullscreen mode");
@@ -113,7 +113,7 @@ static void parseArguments(const QStringList &arguments)
     options.pluginPath = parser.value(pluginPathOption);
     options.importPaths = parser.values(importPathOption);
     options.stayontop = parser.isSet(stayOnTopOption);
-    options.allowOverwriteFiles = !parser.isSet(noOverwriteFilesOption);
+    options.updatesAsOverlay = !parser.isSet(updatesAsOverlayOption);
     options.persistentOverlay = parser.isSet(persistentOverlayOption);
     options.fullscreen = parser.isSet(fullScreenOption);
     options.transparent = parser.isSet(transparentOption);
@@ -179,8 +179,8 @@ int main(int argc, char** argv)
     QQuickView fallbackView(&qmlEngine, 0);
 
     LiveNodeEngine::WorkspaceOptions workspaceOptions = LiveNodeEngine::LoadDummyData | LiveNodeEngine::AllowUpdates;
-    if (options.allowOverwriteFiles)
-        workspaceOptions |= LiveNodeEngine::OverwriteFiles;
+    if (options.updatesAsOverlay)
+        workspaceOptions |= LiveNodeEngine::UpdatesAsOverlay;
     if (options.persistentOverlay)
         workspaceOptions |= LiveNodeEngine::PersistentOverlay;
 

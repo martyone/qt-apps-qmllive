@@ -49,7 +49,7 @@ public:
         NoWorkspaceOption = 0x0,
         LoadDummyData = 0x1,
         AllowUpdates = 0x2,
-        OverwriteFiles = 0x4,
+        UpdatesAsOverlay = 0x4,
         PersistentOverlay = 0x8
     };
     Q_DECLARE_FLAGS(WorkspaceOptions, WorkspaceOption)
