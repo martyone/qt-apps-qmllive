@@ -67,7 +67,8 @@ QImage QmlPreviewAdapter::preview(const QString &path, const QSize &requestedSiz
     static const QString suffix;
 #endif
 
-    static const QString program = QCoreApplication::applicationDirPath() + QDir::separator() + "previewGenerator" + suffix;
+    static const QString program = QCoreApplication::applicationDirPath() +
+        QStringLiteral("/../libexec/qmllive/previewGenerator") + suffix;
     static const QStringList arguments("QmlLiveBench");
 
     if (proc()->state() != QProcess::Running) {

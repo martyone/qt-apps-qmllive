@@ -1,13 +1,19 @@
 TEMPLATE = subdirs
 CONFIG += ordered
 
-!android:!ios {
+skip-bench:skip-examples:static-link-runtime {
+  CONFIG += skip-lib
+}
+
+!skip-lib {
+  SUBDIRS += lib.pro
+}
+
+!android:!ios:!skip-bench {
   SUBDIRS += bench \
              previewGenerator
 }
 
-SUBDIRS += \
-  runtime
-
-
-include(src.pri)
+!skip-runtime {
+  SUBDIRS += runtime
+}

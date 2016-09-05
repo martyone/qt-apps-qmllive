@@ -1,3 +1,6 @@
+isEmpty(QMLLIVE_VERSION): QMLLIVE_VERSION = 0.0.1
+isEmpty(PREFIX): PREFIX = $$[QT_INSTALL_PREFIX]
+
 # from qtcreator.pri
 defineTest(minQtVersion) {
     maj = $$1

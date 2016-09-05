@@ -1,3 +1,5 @@
+include(../../qmllive.pri)
+
 TARGET = qmlliveruntime
 DESTDIR = $$BUILD_DIR/bin
 
@@ -9,11 +11,12 @@ SOURCES += main.cpp
 win32: RC_FILE = ../../icons/appicon.rc
 
 include(../widgets/widgets.pri)
-include(../src.pri)
+
+static-link-runtime: include(../src.pri)
+else: include(../lib.pri)
 
 RESOURCES += \
     qml.qrc
 
-
-
-
+target.path = $$PREFIX/bin
+INSTALLS += target
