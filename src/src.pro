@@ -1,13 +1,13 @@
 TEMPLATE = subdirs
 CONFIG += ordered
 
-!android:!ios {
+SUBDIRS += lib.pro
+
+!android:!ios:!qmllive_no_bench {
   SUBDIRS += bench \
              previewGenerator
 }
 
-SUBDIRS += \
-  runtime
-
-
-include(src.pri)
+!qmllive_no_runtime {
+  SUBDIRS += runtime
+}

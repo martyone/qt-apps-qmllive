@@ -1,3 +1,9 @@
+QMLLIVE_VERSION = 0.0.1
+
+isEmpty(PREFIX) {
+    PREFIX = /usr/local
+}
+
 # from qtcreator.pri
 defineTest(minQtVersion) {
     maj = $$1

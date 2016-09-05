@@ -45,7 +45,6 @@ HEADERS += \
     autodiscoveryhostsdialog.h \
     options.h
 
-
 FORMS += \
     optionsdialog.ui \
     hostsoptionpage.ui \
@@ -54,7 +53,7 @@ FORMS += \
     autodiscoveryhostsdialog.ui
 
 include(../widgets/widgets.pri)
-include(../src.pri)
+include(../lib.pri)
 
 # install rules
 isEmpty(PREFIX) {

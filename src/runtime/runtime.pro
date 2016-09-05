@@ -9,11 +9,7 @@ SOURCES += main.cpp
 win32: RC_FILE = ../../icons/appicon.rc
 
 include(../widgets/widgets.pri)
-include(../src.pri)
+include(../lib.pri)
 
 RESOURCES += \
     qml.qrc
-
-
-
-
