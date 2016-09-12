@@ -47,9 +47,32 @@ QT_FORWARD_DECLARE_CLASS(QTcpSocket);
 class QMLLIVESHARED_EXPORT RemoteReceiver : public QObject
 {
     Q_OBJECT
+
+    enum UpdateState
+    {
+        UpdateNotStarted,
+        UpdateRequested,
+        UpdateStarted,
+        UpdateFinished
+    };
+
+public:
+    enum ConnectionOption
+    {
+        NoConnectionOption = 0x0,
+        UpdateDocumentsOnConnect = 0x1,
+        BlockingConnect = 0x2
+    };
+    Q_DECLARE_FLAGS(ConnectionOptions, ConnectionOption)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 5, 0)
+    Q_FLAG(ConnectionOptions)
+#else
+    Q_FLAGS(ConnectionOptions)
+#endif
+
 public:
     explicit RemoteReceiver(QObject *parent = 0);
-    void listen(int port);
+    bool listen(int port, ConnectionOptions options = NoConnectionOption);
     void registerNode(LiveNodeEngine *node);
     void setPin(const QString& pin);
     QString pin() const;
@@ -65,6 +88,9 @@ Q_SIGNALS:
     void xOffsetChanged(int offset);
     void yOffsetChanged(int offset);
     void rotationChanged(int rotation);
+    void beginBulkUpdate();
+    void endBulkUpdate();
+    void updateDocumentsOnConnectFinished(bool ok);
     void updateDocument(const QString &document, const QByteArray &content);
 
 private Q_SLOTS:
@@ -74,6 +100,9 @@ private Q_SLOTS:
     void clearLog();
 
     void onClientConnected(QTcpSocket *socket);
+    void onClientDisconnected(QTcpSocket *socket);
+    void maybeStartUpdateDocumentsOnConnect();
+
 private:
     IpcServer *m_server;
     LiveNodeEngine *m_node;
@@ -83,5 +112,10 @@ private:
 
     QTcpSocket* m_socket;
     IpcClient* m_client;
+
+    ConnectionOptions m_connectionOptions;
+    bool m_bulkUpdateInProgress;
+    UpdateState m_updateDocumentsOnConnectState;
 };
 
+Q_DECLARE_OPERATORS_FOR_FLAGS(RemoteReceiver::ConnectionOptions)

@@ -56,6 +56,7 @@ Q_SIGNALS:
     void sendingError(const QUuid& uuid, QAbstractSocket::SocketError socketError);
     void connectionError(QAbstractSocket::SocketError error);
     void needsPinAuthentication();
+    void needsPublishWorkspace();
     void pinOk(bool ok);
     void remoteLog(int type, const QString &msg, const QUrl &url = QUrl(), int line = -1, int column = -1);
     void clearLog();
@@ -64,6 +65,8 @@ public Q_SLOTS:
     void setWorkspace(const QString &path);
     void disconnectFromServer();
     QUuid activateDocument(const QString& document);
+    QUuid beginBulkSend();
+    QUuid endBulkSend();
     QUuid sendDocument(const QString& document);
     QUuid checkPin(const QString& pin);
     QUuid setXOffset(int offset);
