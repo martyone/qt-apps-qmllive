@@ -65,7 +65,10 @@ int main(int argc, char **argv)
     receiver.registerNode(&node);
     receiver.listen(10234);
 
-    return app.exec();
+    qWarning() << "XXX starting";
+    int rv = app.exec();
+    qWarning() << "XXX exiting";
+    return rv;
 }
 //![0]
 

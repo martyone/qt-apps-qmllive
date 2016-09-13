@@ -36,6 +36,7 @@
 
 #include <QTcpSocket>
 
+#define QMLLIVE_DEBUG 1
 #ifdef QMLLIVE_DEBUG
 #define DEBUG qDebug()
 #else
@@ -103,6 +104,12 @@ bool RemoteReceiver::listen(int port, ConnectionOptions options)
     if (m_connectionOptions & BlockingConnect) {
         QEventLoop loop;
 
+        connect(this, &RemoteReceiver::pinOk, [](bool ok) {
+                qWarning() << "WWW pinOk" << ok;
+            });
+        connect(this, &RemoteReceiver::updateDocumentsOnConnectFinished, [](bool ok) {
+                qWarning() << "WWW updateDocumentsOnConnectFinished" << ok;
+            });
         if (!m_pin.isEmpty()) {
             bool pinOk = false;
             connect(this, &RemoteReceiver::pinOk, [&loop, &pinOk](bool ok) {
@@ -221,6 +228,7 @@ void RemoteReceiver::handleCall(const QString &method, const QByteArray &content
         QDataStream in(content);
         in >> document;
         in >> data;
+        qWarning() << "WWW document:" << document;
         emit updateDocument(document, data);
     } else if (method == "activateDocument(QString)") {
         QString document;
@@ -293,6 +301,7 @@ void RemoteReceiver::maybeStartUpdateDocumentsOnConnect()
     if (m_updateDocumentsOnConnectState == UpdateNotStarted) {
         m_client->send("needsPublishWorkspace()", QByteArray());
         m_updateDocumentsOnConnectState = UpdateRequested;
+        qWarning() << "WWW sent needsPublishWorkspace";
     }
 }
 

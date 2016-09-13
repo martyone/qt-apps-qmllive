@@ -553,13 +553,17 @@ void LiveNodeEngine::initOverlay()
 
 void LiveNodeEngine::destroyOverlay()
 {
+    qWarning() << "XXX " << Q_FUNC_INFO;
     if (m_workspaceOptions & UpdatesAsOverlay) {
         // Better be paranoid than sorry.
         bool safe = m_overlayUrlInterceptor->overlay().absolutePath().startsWith(QDir::tempPath() + QDir::separator());
         Q_ASSERT(safe);
+        qWarning() << "XXX " << Q_FUNC_INFO << "yes" << safe;
         if (!safe || !m_overlayUrlInterceptor->overlay().removeRecursively())
             qWarning() << "Failed to remove overlay directory";
     }
+    else
+        qWarning() << "XXX " << Q_FUNC_INFO << "no";
 }
 
 /*!
