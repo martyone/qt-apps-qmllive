@@ -1,6 +1,4 @@
-requires(qtHaveModule(widgets))
 requires(!winrt)
-
 
 load(configure)
 load(config-output)

@@ -1,5 +1,7 @@
 include(../../qmllive.pri)
 
+requires(qtHaveModule(widgets))
+
 TEMPLATE = app
 TARGET = qmllivebench
 DESTDIR = $$BUILD_DIR/bin
