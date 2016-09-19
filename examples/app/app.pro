@@ -1,6 +1,7 @@
 TEMPLATE = app
 TARGET = app
 
+macx*: CONFIG -= app_bundle
 QT *= quick
 
 include(../../src/lib.pri)
