@@ -6,6 +6,8 @@ TARGET = qmllive
 DESTDIR = $${BUILD_DIR}/lib
 DEFINES += QMLLIVE_LIBRARY
 
+macx*: QMAKE_SONAME_PREFIX = @rpath
+
 SOURCES += \
     qmllive.cpp
 
@@ -29,5 +31,3 @@ QMAKE_PKGCONFIG_PREFIX = $$PREFIX
 QMAKE_PKGCONFIG_LIBDIR = ${prefix}/lib
 QMAKE_PKGCONFIG_INCDIR = ${prefix}/include/qmllive
 QMAKE_PKGCONFIG_DESTDIR = pkgconfig
-
-macx*:QMAKE_LFLAGS_SONAME = $${QMAKE_LFLAGS_SONAME}@rpath/
