@@ -9,6 +9,7 @@ macx*: CONFIG -= app_bundle
 target.path = $$PREFIX/libexec/qmllive
 INSTALLS += target
 
+CONFIG += c++11
 QT = gui core quick
 
 SOURCES += \
