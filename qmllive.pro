@@ -10,6 +10,11 @@ include(qmllive.pri)
 TEMPLATE = subdirs
 CONFIG += ordered
 
+android|ios {
+    message("Note: the bench, examples and shared library will not be built on this platform")
+    CONFIG += skip-bench skip-examples static-link-runtime
+}
+
 SUBDIRS += src
 !CONFIG(skip-tests): SUBDIRS += tests
 !CONFIG(skip-examples): SUBDIRS += examples
