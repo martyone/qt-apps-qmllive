@@ -9,7 +9,7 @@ skip-bench:skip-examples:static-link-runtime {
   SUBDIRS += lib.pro
 }
 
-!android:!ios:!skip-bench {
+!skip-bench {
   SUBDIRS += bench \
              previewGenerator
 }
