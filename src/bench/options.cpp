@@ -31,8 +31,6 @@
 
 #include "options.h"
 
-Options *Options::s_instance(nullptr);
-
 Options::Options(QObject *parent)
     : QObject(parent)
 
@@ -40,11 +38,12 @@ Options::Options(QObject *parent)
 
 }
 
-Options *Options::instance() {
-    if (!s_instance) {
-        s_instance = new Options(QCoreApplication::instance());
-    }
-    return s_instance;
+bool Options::hasNoninteractiveOptions() const
+{
+    if (!m_hostsToAdd.isEmpty())
+        return true;
+
+    return false;
 }
 
 QString Options::activeDocument() const

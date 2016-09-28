@@ -44,10 +44,10 @@ public:
         int port;
     };
 
-private:
-    explicit Options(QObject *parent = 0);
 public:
-    static Options *instance();
+    explicit Options(QObject *parent = 0);
+
+    bool hasNoninteractiveOptions() const;
 
     QString activeDocument() const;
     void setActiveDocument(const QString &activeDocument);
@@ -70,7 +70,6 @@ public:
     void addHostToAdd(const HostOptions &hostOptions);
 
 private:
-    static Options *s_instance;
     QString m_activeDocument;
     QString m_workspace;
     QString m_pluginPath;
