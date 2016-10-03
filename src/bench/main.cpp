@@ -37,20 +37,21 @@
 #include "mainwindow.h"
 #include "qmllive_version.h"
 
-class Application : public QApplication
+// Not inheriting QApplication as it must exist before choosing concrete implementation
+class Application : public QObject
 {
     Q_OBJECT
 
 public:
-    static Application *create(int &argc, char **argv);
+    static int main(int &argc, char **argv);
 
 protected:
-    Application(int &argc, char **argv);
+    Application(const Options &options);
     static bool isMaster();
 
-    QString serverName() const;
-    void setDarkStyle();
-    void parseArguments(const QStringList &arguments, Options *options);
+    static QString serverName();
+    static void setDarkStyle();
+    static void parseArguments(const QStringList &arguments, Options *options);
 };
 
 class MasterApplication : public Application
@@ -58,7 +59,7 @@ class MasterApplication : public Application
     Q_OBJECT
 
 public:
-    MasterApplication(int &argc, char **argv);
+    MasterApplication(const Options &options);
 
 private:
     void listenForArguments();
@@ -73,38 +74,49 @@ class SlaveApplication : public Application
     Q_OBJECT
 
 public:
-    SlaveApplication(int &argc, char **argv);
+    SlaveApplication(const Options &options);
 
 private:
     void warnAboutIgnoredOptions(const Options &options);
     void forwardArguments();
 };
 
-Application *Application::create(int &argc, char **argv)
+int Application::main(int &argc, char **argv)
 {
-    setApplicationName("QmlLiveBench");
-    setOrganizationDomain(QLatin1String(QMLLIVE_ORGANIZATION_DOMAIN));
-    setOrganizationName(QLatin1String(QMLLIVE_ORGANIZATION_NAME));
+    // Access it with the globally available 'qApp' macro elsewhere
+    QApplication qApplication(argc, argv);
 
-    if (isMaster())
-        return new MasterApplication(argc, argv);
+    qApplication.setApplicationName("QmlLiveBench");
+    qApplication.setOrganizationDomain(QLatin1String(QMLLIVE_ORGANIZATION_DOMAIN));
+    qApplication.setOrganizationName(QLatin1String(QMLLIVE_ORGANIZATION_NAME));
+
+    Options options;
+    parseArguments(qApplication.arguments(), &options);
+
+    QScopedPointer<Application> app;
+    if (options.noRemote() || isMaster())
+        app.reset(new MasterApplication(options));
     else
-        return new SlaveApplication(argc, argv);
+        app.reset(new SlaveApplication(options));
+
+    return qApplication.exec();
 }
 
-Application::Application(int &argc, char **argv)
-    : QApplication(argc, argv)
+Application::Application(const Options &options)
+    : QObject(qApp)
 {
-    setAttribute(Qt::AA_NativeWindows, true);
-    setAttribute(Qt::AA_ImmediateWidgetCreation, true);
+    Q_UNUSED(options);
+
+    qApp->setAttribute(Qt::AA_NativeWindows, true);
+    qApp->setAttribute(Qt::AA_ImmediateWidgetCreation, true);
 
     setDarkStyle();
 }
 
 bool Application::isMaster()
 {
-    Q_ASSERT(!applicationName().isEmpty());
-    Q_ASSERT(!organizationDomain().isEmpty() || !organizationName().isEmpty());
+    Q_ASSERT(!qApp->applicationName().isEmpty());
+    Q_ASSERT(!qApp->organizationDomain().isEmpty() || !qApp->organizationName().isEmpty());
 
     static QSharedMemory *lock = 0;
     static bool retv = false;
@@ -113,8 +125,8 @@ bool Application::isMaster()
         return retv;
 
     const QString key = QString::fromLatin1("%1.%2-lock")
-        .arg(organizationDomain().isEmpty() ? organizationName() : organizationDomain())
-        .arg(applicationName());
+        .arg(qApp->organizationDomain().isEmpty() ? qApp->organizationName() : qApp->organizationDomain())
+        .arg(qApp->applicationName());
 
     lock = new QSharedMemory(key, qApp);
 
@@ -134,14 +146,14 @@ bool Application::isMaster()
     return retv = true;
 }
 
-QString Application::serverName() const
+QString Application::serverName()
 {
-    Q_ASSERT(!applicationName().isEmpty());
-    Q_ASSERT(!organizationDomain().isEmpty() || !organizationName().isEmpty());
+    Q_ASSERT(!qApp->applicationName().isEmpty());
+    Q_ASSERT(!qApp->organizationDomain().isEmpty() || !qApp->organizationName().isEmpty());
 
     return QString::fromLatin1("%1.%2-app")
-        .arg(organizationDomain().isEmpty() ? organizationName() : organizationDomain())
-        .arg(applicationName());
+        .arg(qApp->organizationDomain().isEmpty() ? qApp->organizationName() : qApp->organizationDomain())
+        .arg(qApp->applicationName());
 }
 
 void Application::setDarkStyle()
@@ -150,7 +162,7 @@ void Application::setDarkStyle()
     if (!style) {
         return;
     }
-    setStyle(style);
+    qApp->setStyle(style);
 
     QPalette palette;
     palette.setColor(QPalette::Window, QColor("#3D3D3D"));
@@ -165,7 +177,7 @@ void Application::setDarkStyle()
     palette.setColor(QPalette::BrightText, QColor("#D0021B"));
     palette.setColor(QPalette::Highlight, QColor("#F19300"));
     palette.setColor(QPalette::HighlightedText, QColor("#1C1C1C"));
-    setPalette(palette);
+    qApp->setPalette(palette);
 }
 
 void Application::parseArguments(const QStringList &arguments, Options *options)
@@ -187,12 +199,20 @@ void Application::parseArguments(const QStringList &arguments, Options *options)
     parser.addOption(addHostOption);
     QCommandLineOption rmHostOption("rmhost", "remove remote host configuration and exit", "name");
     parser.addOption(rmHostOption);
+    QCommandLineOption noRemoteOption("noremote", "do not try to talk to a running bench, do not listen for remote connections.");
+    parser.addOption(noRemoteOption);
     QCommandLineOption remoteOnlyOption("remoteonly", "talk to a running bench, do nothing if none is running.");
     parser.addOption(remoteOnlyOption);
 
     parser.process(arguments);
 
+    options->setNoRemote(parser.isSet(noRemoteOption));
     options->setRemoteOnly(parser.isSet(remoteOnlyOption));
+    if (options->noRemote() && options->remoteOnly()) {
+        qWarning() << "Options --noremote and --remoteonly cannot be used together";
+        parser.showHelp(-1);
+    }
+
     options->setPluginPath(parser.value(pluginPathOption));
     options->setImportPaths(parser.values(importPathOption));
     options->setStayOnTop(parser.isSet(stayOnTopOption));
@@ -265,26 +285,24 @@ void Application::parseArguments(const QStringList &arguments, Options *options)
  * class MasterApplication
  */
 
-MasterApplication::MasterApplication(int &argc, char **argv)
-    : Application(argc, argv)
+MasterApplication::MasterApplication(const Options &options)
+    : Application(options)
     , m_window(new MainWindow)
 {
-    Options options;
-    parseArguments(arguments(), &options);
-
     if (options.remoteOnly()) {
-        QTimer::singleShot(0, this, &QCoreApplication::quit);
+        QTimer::singleShot(0, &QCoreApplication::quit);
         return;
     }
 
     applyOptions(options);
 
     if (options.hasNoninteractiveOptions()) {
-        QTimer::singleShot(0, this, &QCoreApplication::quit);
+        QTimer::singleShot(0, &QCoreApplication::quit);
     } else {
         m_window->init();
         m_window->show();
-        listenForArguments();
+        if (!options.noRemote())
+            listenForArguments();
     }
 }
 
@@ -411,13 +429,10 @@ void MasterApplication::applyOptions(const Options &options)
  * class SlaveApplication
  */
 
-SlaveApplication::SlaveApplication(int &argc, char **argv)
-    : Application(argc, argv)
+SlaveApplication::SlaveApplication(const Options &options)
+    : Application(options)
 {
     qInfo() << "Another instance running. Activating...";
-
-    Options options;
-    parseArguments(arguments(), &options);
 
     warnAboutIgnoredOptions(options);
     forwardArguments();
@@ -444,19 +459,18 @@ void SlaveApplication::forwardArguments()
 
     connect(socket, &QLocalSocket::connected, this, [socket]() {
         QDataStream out(socket);
-        out << arguments();
+        out << qApp->arguments();
         socket->disconnectFromServer();
     });
 
-    connect(socket, &QLocalSocket::disconnected, this, &QCoreApplication::quit);
+    connect(socket, &QLocalSocket::disconnected, &QCoreApplication::quit);
 
     socket->connectToServer(serverName());
 }
 
 int main(int argc, char** argv)
 {
-    QScopedPointer<Application> app(Application::create(argc, argv));
-    return app->exec();
+    return Application::main(argc, argv);
 }
 
 #include "main.moc"
