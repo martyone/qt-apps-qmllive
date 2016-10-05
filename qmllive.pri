@@ -1,3 +1,8 @@
+android|ios {
+    message("Note: the bench, examples and shared library will not be built on this platform")
+    CONFIG += skip-bench skip-examples static-link-runtime
+}
+
 VERSION = 0.1.0
 isEmpty(PREFIX): PREFIX = $$[QT_INSTALL_PREFIX]
 isEmpty(EXAMPLES_PREFIX): EXAMPLES_PREFIX = $$[QT_INSTALL_LIBS]/qmllive/examples
