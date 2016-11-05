@@ -70,6 +70,7 @@ private slots:
     void updatePort(int port);
     void updateFile(const QString& file);
     void setUpdateFile(const QString& file);
+    void refreshDocumentLabel();
     void updateOnlineState(bool online);
     void updateFollowTreeSelection(bool follow);
 
