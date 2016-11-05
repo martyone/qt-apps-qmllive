@@ -208,6 +208,8 @@ void HostWidget::setUpdateFile(const QString &file)
     }
 
     QString relFile = QDir(m_engine->workspace()).relativeFilePath(file);
+    if (QFileInfo(file).isDir())
+        relFile += QLatin1Char('/');
     QFontMetrics metrics(font());
     m_documentLabel->setText(metrics.elidedText(relFile, Qt::ElideLeft, m_documentLabel->width()));
     m_documentLabel->setToolTip(relFile);
