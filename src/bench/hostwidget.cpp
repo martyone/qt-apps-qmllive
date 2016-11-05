@@ -148,6 +148,7 @@ void HostWidget::setLiveHubEngine(LiveHubEngine *engine)
     m_publisher.setWorkspace(m_engine->workspace());
 
     connect(m_engine.data(), SIGNAL(workspaceChanged(QString)), &m_publisher, SLOT(setWorkspace(QString)));
+    connect(m_engine.data(), SIGNAL(workspaceChanged(QString)), this, SLOT(refreshDocumentLabel()));
     connect(m_engine.data(), SIGNAL(fileChanged(QString)), this, SLOT(sendDocument(QString)));
     connect(m_engine.data(), SIGNAL(beginPublishWorkspace()), &m_publisher, SLOT(beginBulkSend()));
     connect(m_engine.data(), SIGNAL(endPublishWorkspace()), &m_publisher, SLOT(endBulkSend()));
@@ -211,6 +212,13 @@ void HostWidget::setUpdateFile(const QString &file)
     QFontMetrics metrics(font());
     m_documentLabel->setText(metrics.elidedText(relFile, Qt::ElideLeft, m_documentLabel->width()));
     m_documentLabel->setToolTip(relFile);
+}
+
+void HostWidget::refreshDocumentLabel()
+{
+    if (!m_host)
+        return;
+    setUpdateFile(m_host->currentFile());
 }
 
 void HostWidget::updateOnlineState(bool online)
@@ -421,8 +429,7 @@ void HostWidget::resizeEvent(QResizeEvent *event)
 {
     Q_UNUSED(event);
 
-    if (m_host)
-        setUpdateFile(m_host->currentFile());
+    refreshDocumentLabel();
 }
 
 void HostWidget::showPinDialog()
