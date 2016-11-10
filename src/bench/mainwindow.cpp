@@ -240,6 +240,10 @@ void MainWindow::init()
 
     updateRecentFolder();
 
+    resetImportPaths();
+
+    m_hostModel->restoreFromSettings(&s);
+
     //Only set the workspace if we didn't already set it by command line
     if (m_node->activeDocument().isEmpty()) {
         if (s.contains("activeDocument")) {
@@ -249,9 +253,6 @@ void MainWindow::init()
         }
     }
 
-    resetImportPaths();
-
-    m_hostModel->restoreFromSettings(&s);
     restoreState(s.value("windowState").toByteArray());
 
     m_initialized = true;

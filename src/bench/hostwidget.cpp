@@ -264,7 +264,8 @@ void HostWidget::connectToServer()
 void HostWidget::connectAndSendFile()
 {
     connectToServer();
-    m_activateId = m_publisher.activateDocument(QDir(m_engine->workspace()).relativeFilePath(m_host->currentFile()));
+    if (!m_host->currentFile().isEmpty())
+        m_activateId = m_publisher.activateDocument(QDir(m_engine->workspace()).relativeFilePath(m_host->currentFile()));
 }
 
 void HostWidget::onConnected()
@@ -311,7 +312,7 @@ void HostWidget::refresh()
 
 void HostWidget::probe()
 {
-    connectToServer();
+    connectAndSendFile();
 }
 
 void HostWidget::publishWorkspace()
