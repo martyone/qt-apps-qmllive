@@ -1,6 +1,6 @@
 Name: qmllive
-Version: 0
-Release: 1
+Version: 1.0
+Release: 999
 Summary: Qt QmlLive - live reloader environment for rapid UI development
 Group: Development/Tools
 License: GPLv3

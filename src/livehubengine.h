@@ -33,6 +33,7 @@
 
 #include <QtCore>
 
+#include "livedocument.h"
 #include "qmllive_global.h"
 
 class Watcher;
@@ -46,17 +47,17 @@ public:
     void setWorkspace(const QString& path);
     QString workspace() const;
 
-    QString activePath() const;
+    LiveDocument activePath() const;
 public Q_SLOTS:
-    void setActivePath(const QString& path);
+    void setActivePath(const LiveDocument& path);
     void setFilePublishingActive(bool on);
     void publishWorkspace();
 Q_SIGNALS:
     void beginPublishWorkspace();
     void endPublishWorkspace();
-    void publishFile(const QString& document);
-    void fileChanged(const QString& document);
-    void activateDocument(const QString& document);
+    void publishFile(const LiveDocument& document);
+    void fileChanged(const LiveDocument& document);
+    void activateDocument(const LiveDocument& document);
     void workspaceChanged(const QString& workspace);
 private Q_SLOTS:
     void directoriesChanged(const QStringList& changes);
@@ -65,6 +66,6 @@ private:
 private:
     Watcher *m_watcher;
     bool m_filePublishingActive;
-    QString m_activePath;
+    LiveDocument m_activePath;
 };
 
